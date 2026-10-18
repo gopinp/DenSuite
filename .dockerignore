@@ -1,0 +1,7 @@
+.git
+.next
+node_modules
+apps/mobile/node_modules
+**/target
+**/.expo
+**/dist

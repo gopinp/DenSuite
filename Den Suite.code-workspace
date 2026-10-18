@@ -1,0 +1,11 @@
+{
+  "folders": [
+    {
+      "path": ".",
+      "name": "Den Suite"
+    }
+  ],
+  "settings": {
+    "window.title": "Den Suite — ${activeEditorShort}"
+  }
+}

@@ -1,0 +1,164 @@
+:root {
+  --den-purple: #6554cb;
+  --den-purple-hover: #5544bd;
+  --den-ink: #20243a;
+  --den-muted: #82869a;
+  --den-line: #edecf2;
+  --den-canvas: #f8f8fb;
+}
+
+html,
+body,
+.pf-v5-c-login {
+  min-height: 100%;
+  background: var(--den-canvas);
+  color: var(--den-ink);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.pf-v5-c-login {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 20px;
+}
+
+.pf-v5-c-login__container {
+  display: flex;
+  width: 100%;
+  min-height: calc(100vh - 64px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.pf-v5-c-login__header {
+  display: flex;
+  width: min(100%, 460px);
+  margin: 0;
+  justify-content: flex-start;
+  padding: 0 8px 18px;
+}
+
+.pf-v5-c-login__main {
+  width: min(100%, 460px);
+  flex: 0 1 auto;
+  align-self: center;
+  overflow: hidden;
+  border: 1px solid var(--den-line);
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 18px 48px rgb(37 35 72 / 8%);
+}
+
+.pf-v5-c-login__main-header {
+  padding: 28px 32px 8px;
+  background: #fff;
+}
+
+.pf-v5-c-login__main-header #kc-page-title {
+  color: #282a40;
+  font-size: 25px;
+  font-weight: 700;
+  letter-spacing: -0.7px;
+}
+
+#kc-header-wrapper {
+  min-height: 36px;
+  padding-left: 44px;
+  background: url("../img/brand.svg") left center / 34px 34px no-repeat;
+  color: #292842;
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -1px;
+  text-transform: none;
+}
+
+.pf-v5-c-login__main-body {
+  padding: 18px 32px 32px;
+}
+
+.pf-v5-c-form__label,
+.pf-v5-c-form label {
+  color: #44465a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.pf-v5-c-form-control {
+  min-height: 47px;
+  border: 1px solid #e2e2eb;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--den-ink);
+  box-shadow: none;
+  font: inherit;
+}
+
+.pf-v5-c-form-control:focus {
+  border-color: #887bd5;
+  box-shadow: 0 0 0 3px rgb(101 84 203 / 12%);
+}
+
+.pf-v5-c-button.pf-m-primary,
+#kc-login {
+  min-height: 47px;
+  border: 0;
+  border-radius: 9px;
+  background: var(--den-purple);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  transition: background 130ms ease;
+}
+
+.pf-v5-c-button.pf-m-primary:hover,
+#kc-login:hover {
+  background: var(--den-purple-hover);
+  color: #fff;
+}
+
+.pf-v5-c-login a {
+  color: var(--den-purple);
+}
+
+.pf-v5-c-login a:hover {
+  color: var(--den-purple-hover);
+}
+
+.den-register {
+  margin: 20px 0 0;
+  color: var(--den-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.den-register a {
+  font-weight: 700;
+}
+
+.pf-v5-c-alert {
+  border-radius: 9px;
+}
+
+@media (max-width: 480px) {
+  .pf-v5-c-login {
+    padding: 20px 16px;
+  }
+
+  .pf-v5-c-login__container {
+    min-height: calc(100vh - 40px);
+  }
+
+  .pf-v5-c-login__header {
+    padding: 0 8px 14px;
+  }
+
+  .pf-v5-c-login__main-header {
+    padding: 22px 20px 8px;
+  }
+
+  .pf-v5-c-login__main-body {
+    padding: 16px 20px 24px;
+  }
+}

@@ -1,0 +1,52 @@
+{
+  "realm": "dentsuite",
+  "enabled": true,
+  "displayName": "Den Suite",
+  "loginTheme": "den-suite",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "EMPLOYER",
+        "description": "Den Suite practice owner or employer"
+      },
+      {
+        "name": "EMPLOYEE",
+        "description": "Den Suite practice employee"
+      },
+      {
+        "name": "PRACTICE_MANAGER",
+        "description": "Employee permitted to manage their practice team"
+      },
+      {
+        "name": "DENTSUITE_ADMIN",
+        "description": "Den Suite administrator permitted to issue employer invitations"
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "dentsuite-web",
+      "name": "Den Suite Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      }
+    }
+  ]
+}

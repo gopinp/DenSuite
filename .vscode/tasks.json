@@ -1,0 +1,31 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Den Suite web app",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		},
+		{
+			"label": "Start Den Suite mobile Expo server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"apps/mobile",
+				"run",
+				"start",
+				"--",
+				"--lan"
+			],
+			"isBackground": true,
+			"problemMatcher": []
+		}
+	]
+}

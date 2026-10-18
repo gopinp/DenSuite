@@ -1,0 +1,144 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: dentsuite
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    ports:
+      - "${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dentsuite -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  dentstaff:
+    build:
+      context: .
+      dockerfile: services/dentstaff/Dockerfile
+      args:
+        SERVICE_DIR: services/dentstaff
+    environment:
+      DB_HOST: postgres
+      DB_NAME: dentsuite_staff
+      DB_USER: dentsuite
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      KEYCLOAK_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://localhost:8180}
+      KEYCLOAK_REALM: dentsuite
+      EMPLOYER_JOIN_CODE: ${EMPLOYER_JOIN_CODE:?Set EMPLOYER_JOIN_CODE in .env}
+      DENTSUITE_PUBLIC_WEB_URL: ${DENTSUITE_PUBLIC_WEB_URL:-http://localhost:3000}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@dentsuite.local}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_START_TLS: ${SMTP_START_TLS:-DISABLED}
+      SMTP_SSL: ${SMTP_SSL:-false}
+      QUARKUS_HTTP_PORT: 8080
+    ports:
+      - "${DENTSTAFF_HOST_PORT:-8085}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3.3
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:?Set KEYCLOAK_ADMIN_USERNAME in .env}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set KEYCLOAK_ADMIN_PASSWORD in .env}
+      KC_DB: postgres
+      KC_DB_URL_HOST: postgres
+      KC_DB_URL_DATABASE: dentsuite_keycloak
+      KC_DB_USERNAME: dentsuite
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      KC_HEALTH_ENABLED: "true"
+      KC_SPI_THEME_CACHE_THEMES: "false"
+      KC_SPI_THEME_CACHE_TEMPLATES: "false"
+    ports:
+      - "${KEYCLOAK_HOST_PORT:-8180}:8080"
+    volumes:
+      - ./infra/keycloak/realm-export.json:/opt/keycloak/data/import/dentsuite-realm.json:ro
+      - ./infra/keycloak/themes:/opt/keycloak/themes:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/9000'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  mailpit:
+    image: axllent/mailpit:v1.20
+    ports:
+      - "8025:8025"
+
+  dentstock:
+    build:
+      context: .
+      dockerfile: services/dentstock/Dockerfile
+      args:
+        SERVICE_DIR: services/dentstock
+    environment:
+      DB_HOST: postgres
+      DB_NAME: dentsuite_stock
+      DB_USER: dentsuite
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      QUARKUS_HTTP_PORT: 8080
+    ports:
+      - "8082:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dentrota:
+    build:
+      context: .
+      dockerfile: services/dentrota/Dockerfile
+      args:
+        SERVICE_DIR: services/dentrota
+    environment:
+      DB_HOST: postgres
+      DB_NAME: dentsuite_rota
+      DB_USER: dentsuite
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      QUARKUS_HTTP_PORT: 8080
+    ports:
+      - "8083:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  dentos:
+    build:
+      context: .
+      dockerfile: services/dentos/Dockerfile
+      args:
+        SERVICE_DIR: services/dentos
+    environment:
+      DB_HOST: postgres
+      DB_NAME: dentsuite_dentos
+      DB_USER: dentsuite
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      QUARKUS_HTTP_PORT: 8080
+    ports:
+      - "8084:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:

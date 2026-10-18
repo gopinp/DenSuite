@@ -1,0 +1,18 @@
+{
+  "expo": {
+    "name": "Den Suite",
+    "slug": "dentsuite",
+    "scheme": "dentsuite",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#6554cb"
+      }
+    }
+  }
+}
