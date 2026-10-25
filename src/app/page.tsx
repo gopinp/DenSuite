@@ -9,6 +9,8 @@ type AuthScreen = "login" | "register-choice" | "employer-register" | "employee-
 export default function HomePage() {
   const [screen, setScreen] = useState<AuthScreen>("login");
   const [username, setUsername] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -55,6 +57,8 @@ export default function HomePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             username,
+            firstName,
+            lastName,
             password,
             joinCode,
             accountType: isEmployer ? "EMPLOYER" : "EMPLOYEE",
@@ -177,6 +181,36 @@ export default function HomePage() {
                 value={username}
               />
             </div>}
+
+            {isRegister && (
+              <div className="auth-field">
+                <label htmlFor="first-name">First name</label>
+                <input
+                  autoComplete="given-name"
+                  id="first-name"
+                  maxLength={80}
+                  name="first-name"
+                  onChange={(event) => setFirstName(event.target.value)}
+                  required
+                  value={firstName}
+                />
+              </div>
+            )}
+
+            {isRegister && (
+              <div className="auth-field">
+                <label htmlFor="last-name">Last name</label>
+                <input
+                  autoComplete="family-name"
+                  id="last-name"
+                  maxLength={80}
+                  name="last-name"
+                  onChange={(event) => setLastName(event.target.value)}
+                  required
+                  value={lastName}
+                />
+              </div>
+            )}
 
             {isRegister && (
               <div className="auth-field">

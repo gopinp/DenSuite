@@ -35,6 +35,7 @@ services:
       KEYCLOAK_ISSUER_URL: ${KEYCLOAK_ISSUER_URL:-http://localhost:8180}
       KEYCLOAK_REALM: dentsuite
       EMPLOYER_JOIN_CODE: ${EMPLOYER_JOIN_CODE:?Set EMPLOYER_JOIN_CODE in .env}
+      CODE_ENCRYPTION_KEY: ${CODE_ENCRYPTION_KEY:?Set CODE_ENCRYPTION_KEY in .env}
       DENTSUITE_PUBLIC_WEB_URL: ${DENTSUITE_PUBLIC_WEB_URL:-http://localhost:3000}
       EMAIL_FROM: ${EMAIL_FROM:-noreply@dentsuite.local}
       SMTP_HOST: ${SMTP_HOST:-mailpit}

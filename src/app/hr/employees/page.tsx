@@ -16,6 +16,8 @@ export default function EmployeesPage() {
   const [practices, setPractices] = useState<Practice[]>([]);
   const [practiceId, setPracticeId] = useState("");
   const [invitation, setInvitation] = useState<Invitation | null>(null);
+  const [jobRole, setJobRole] = useState("DENTIST");
+  const [inviteEmail, setInviteEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -68,13 +70,14 @@ export default function EmployeesPage() {
           Authorization: `Bearer ${keycloak.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ practiceId }),
+        body: JSON.stringify({ practiceId, jobRole, email: inviteEmail }),
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.message ?? "The invitation could not be created.");
       }
       setInvitation(result as Invitation);
+      setInviteEmail("");
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -104,7 +107,7 @@ export default function EmployeesPage() {
         </p>
         <h1 className="mt-2 text-2xl font-semibold text-slate-900">Employees</h1>
         <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
-          Invite employees to a practice with a private, single-use registration code.
+          Invite a dentist, dental nurse or dental receptionist with a private, single-use registration code.
         </p>
         <Link className="mt-3 inline-block text-sm font-semibold text-violet-700 hover:text-violet-900"
           href="/hr/practices">
@@ -144,6 +147,33 @@ export default function EmployeesPage() {
                   <option key={practice.id} value={practice.id}>{practice.name}</option>
                 ))}
               </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="invite-role">
+              Role
+              <select
+                className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
+                id="invite-role"
+                onChange={(event) => setJobRole(event.target.value)}
+                required
+                value={jobRole}
+              >
+                <option value="DENTIST">Dentist</option>
+                <option value="DENTAL_NURSE">Dental nurse</option>
+                <option value="DENTAL_RECEPTIONIST">Dental receptionist</option>
+              </select>
+            </label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="invite-email">
+              Colleague&apos;s email address
+              <input
+                autoComplete="off"
+                className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                id="invite-email"
+                maxLength={254}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                required
+                type="email"
+                value={inviteEmail}
+              />
             </label>
             <button
               className="min-h-11 rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:opacity-60"

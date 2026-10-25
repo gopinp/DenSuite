@@ -53,6 +53,9 @@ public class EmployerInvitationResource {
     @Inject
     Mailer mailer;
 
+    @Inject
+    CodeVault codeVault;
+
     @ConfigProperty(name = "dentsuite.public-web-url")
     String publicWebUrl;
 
@@ -62,7 +65,7 @@ public class EmployerInvitationResource {
                 PreparedStatement statement = connection.prepareStatement(
                         "SELECT invite_id, issued_by, created_at, expires_at, used_at, redeemed_by, "
                                 + "employer_email, organization_name, practice_setup, "
-                                + "revoked_at, revoked_by, "
+                                + "revoked_at, revoked_by, code_encrypted, "
                                 + "CASE WHEN revoked_at IS NOT NULL THEN 'REVOKED' "
                                 + "WHEN used_at IS NOT NULL THEN 'USED' "
                                 + "WHEN expires_at <= CURRENT_TIMESTAMP THEN 'EXPIRED' "
@@ -85,7 +88,8 @@ public class EmployerInvitationResource {
                             result.getString("redeemed_by"),
                             toInstant(result.getTimestamp("revoked_at")),
                             result.getString("revoked_by"),
-                            result.getString("status")));
+                            result.getString("status"),
+                            codeVault.decrypt(result.getString("code_encrypted"))));
                 }
                 return Response.ok(invitations).build();
             }
@@ -116,16 +120,17 @@ public class EmployerInvitationResource {
         try (Connection connection = dataSource.getConnection();
                 PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO registration_codes "
-                                + "(invite_id, code_hash, account_type, issued_by, expires_at, "
+                                + "(invite_id, code_hash, code_encrypted, account_type, issued_by, expires_at, "
                                 + "employer_email, organization_name, practice_setup) "
-                                + "VALUES (?, ?, 'EMPLOYER', ?, ?, ?, ?, ?)")) {
+                                + "VALUES (?, ?, ?, 'EMPLOYER', ?, ?, ?, ?, ?)")) {
             statement.setObject(1, invitationId);
             statement.setString(2, RegistrationCodeSupport.hash(code));
-            statement.setString(3, issuer);
-            statement.setTimestamp(4, Timestamp.from(expiresAt));
-            statement.setString(5, email);
-            statement.setString(6, organizationName);
-            statement.setString(7, practiceSetup);
+            statement.setString(3, codeVault.encrypt(code));
+            statement.setString(4, issuer);
+            statement.setTimestamp(5, Timestamp.from(expiresAt));
+            statement.setString(6, email);
+            statement.setString(7, organizationName);
+            statement.setString(8, practiceSetup);
             statement.executeUpdate();
         } catch (SQLException exception) {
             LOG.error("Could not create employer invitation.", exception);
@@ -181,19 +186,20 @@ public class EmployerInvitationResource {
                 try (PreparedStatement statement = connection.prepareStatement(
                         "SELECT invite_id FROM registration_codes "
                                 + "WHERE invite_id = ? AND account_type = 'EMPLOYER' AND is_bootstrap = FALSE "
-                                + "AND active = TRUE AND used_at IS NULL AND revoked_at IS NULL "
-                                + "AND expires_at > CURRENT_TIMESTAMP FOR UPDATE")) {
+                                + "AND used_at IS NULL FOR UPDATE")) {
                     statement.setObject(1, previousInvitationId);
                     try (ResultSet result = statement.executeQuery()) {
                         if (!result.next()) {
                             connection.rollback();
                             return error(Response.Status.CONFLICT,
-                                    "Only active, unused employer invitations can be edited.");
+                                    "Only unused employer invitations can be regenerated.");
                         }
                     }
                 }
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "UPDATE registration_codes SET active = FALSE, revoked_at = CURRENT_TIMESTAMP, revoked_by = ? "
+                        "UPDATE registration_codes SET active = FALSE, "
+                                + "revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP), "
+                                + "revoked_by = COALESCE(revoked_by, ?) "
                                 + "WHERE invite_id = ?")) {
                     statement.setString(1, issuer);
                     statement.setObject(2, previousInvitationId);
@@ -294,7 +300,7 @@ public class EmployerInvitationResource {
         return null;
     }
 
-    private static void insertInvitation(
+    private void insertInvitation(
             Connection connection,
             UUID invitationId,
             String code,
@@ -305,16 +311,17 @@ public class EmployerInvitationResource {
             String practiceSetup) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO registration_codes "
-                        + "(invite_id, code_hash, account_type, issued_by, expires_at, "
+                        + "(invite_id, code_hash, code_encrypted, account_type, issued_by, expires_at, "
                         + "employer_email, organization_name, practice_setup) "
-                        + "VALUES (?, ?, 'EMPLOYER', ?, ?, ?, ?, ?)")) {
+                        + "VALUES (?, ?, ?, 'EMPLOYER', ?, ?, ?, ?, ?)")) {
             statement.setObject(1, invitationId);
             statement.setString(2, RegistrationCodeSupport.hash(code));
-            statement.setString(3, issuer);
-            statement.setTimestamp(4, Timestamp.from(expiresAt));
-            statement.setString(5, email);
-            statement.setString(6, organizationName);
-            statement.setString(7, practiceSetup);
+            statement.setString(3, codeVault.encrypt(code));
+            statement.setString(4, issuer);
+            statement.setTimestamp(5, Timestamp.from(expiresAt));
+            statement.setString(6, email);
+            statement.setString(7, organizationName);
+            statement.setString(8, practiceSetup);
             statement.executeUpdate();
         }
     }
@@ -394,6 +401,7 @@ public class EmployerInvitationResource {
             String redeemedBy,
             Instant revokedAt,
             String revokedBy,
-            String status) {
+            String status,
+            String code) {
     }
 }

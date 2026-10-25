@@ -377,11 +377,40 @@ body {
   margin-left: 0;
 }
 
+a[href],
+button:not(:disabled),
+select {
+  cursor: pointer;
+}
+
+.link-button {
+  color: #6d3fd8;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.link-button:hover:not(:disabled) {
+  color: #4c2a9c;
+}
+
+.link-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .admin-nav {
   display: flex;
   gap: 20px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.admin-nav a {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .admin-nav a[aria-current="page"] {

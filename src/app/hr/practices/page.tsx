@@ -203,10 +203,13 @@ export default function PracticesPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.15em] text-violet-700">
             PRACTICE SETUP
           </p>
-          <h1 className="mt-2 text-3xl font-semibold text-slate-900">Practices and managers</h1>
+          <h1 className="mt-2 text-3xl font-semibold text-slate-900">
+            {isOwner ? "Practices and managers" : "Your practice"}
+          </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
-            Manage the locations in your group and create a single-use registration code for each
-            practice manager. Managers can then invite their own employees.
+            {isOwner
+              ? "Manage the locations in your group and create a single-use registration code for each practice manager. Managers can then invite their own employees."
+              : "Details of the practice you manage."}
           </p>
         </div>
 
@@ -334,6 +337,17 @@ export default function PracticesPage() {
               </section>
             )}
 
+            {!isOwner && (
+              <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+                <h2 className="text-xl font-semibold text-slate-900">Add colleagues</h2>
+                <p className="mt-2 text-sm leading-6 text-slate-600">
+                  Create a registration code for a dentist, dental nurse or dental receptionist on the{" "}
+                  <a className="font-semibold text-violet-700 underline" href="/hr/employees">Employees page</a>.
+                </p>
+              </section>
+            )}
+
+            {isOwner && (
             <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
               <h2 className="text-xl font-semibold text-slate-900">Add a practice manager</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">
@@ -414,6 +428,7 @@ export default function PracticesPage() {
                 </div>
               )}
             </section>
+            )}
           </>
         )}
       </div>

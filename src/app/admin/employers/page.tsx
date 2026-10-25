@@ -16,6 +16,7 @@ type Invitation = {
   revokedAt: string | null;
   revokedBy: string | null;
   status: "ACTIVE" | "USED" | "EXPIRED" | "REVOKED";
+  code: string | null;
 };
 
 type CreatedInvitation = Pick<
@@ -175,6 +176,40 @@ export default function EmployerInvitationsPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function regenerateInvitation(invitation: Invitation) {
+    if (!window.confirm(`Generate a new code for ${invitation.email}? The old code stops working and the new one is emailed.`)) return;
+    setMessage("");
+    setCreatedInvitation(null);
+    try {
+      const keycloak = getKeycloak();
+      await keycloak.updateToken(30);
+      const response = await fetch(
+        `${apiBase}/api/v1/admin/employer-invitations/${invitation.id}`,
+        {
+          method: "PUT",
+          headers: {
+            Authorization: `Bearer ${keycloak.token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email: invitation.email,
+            organizationName: invitation.organizationName,
+            practiceSetup: invitation.practiceSetup,
+            expiresInDays: 7,
+          }),
+        },
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message ?? "The code could not be regenerated.");
+      }
+      setMessage(`New code generated and emailed to ${(result as CreatedInvitation).email}.`);
+      await loadInvitations();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The code could not be regenerated.");
     }
   }
 
@@ -406,9 +441,9 @@ export default function EmployerInvitationsPage() {
                           </span>
                         </td>
                         <td className="px-4 py-4 font-mono text-xs text-slate-600">
-                          {visibleCodes[invitation.id] ? (
+                          {visibleCodes[invitation.id] ?? invitation.code ? (
                             <code className="select-all font-semibold text-violet-800">
-                              {visibleCodes[invitation.id]}
+                              {visibleCodes[invitation.id] ?? invitation.code}
                             </code>
                           ) : (
                             <span className="text-slate-400">Not retrievable</span>
@@ -421,22 +456,31 @@ export default function EmployerInvitationsPage() {
                           {invitation.redeemedBy ?? "—"}
                         </td>
                         <td className="px-4 py-4 text-right">
-                          {invitation.status === "ACTIVE" && (
+                          {invitation.status !== "USED" && (
                             <div className="flex justify-end gap-3">
                               <button
-                                className="font-semibold text-violet-700 hover:text-violet-900"
+                                className="link-button"
+                                onClick={() => void regenerateInvitation(invitation)}
+                                type="button"
+                              >
+                                Regenerate & resend
+                              </button>
+                              <button
+                                className="link-button"
                                 onClick={() => startEditingInvitation(invitation)}
                                 type="button"
                               >
                                 Edit
                               </button>
-                              <button
-                                className="font-semibold text-rose-700 hover:text-rose-900"
-                                onClick={() => void revokeInvitation(invitation)}
-                                type="button"
-                              >
-                                Revoke
-                              </button>
+                              {invitation.status === "ACTIVE" && (
+                                <button
+                                  className="link-button text-rose-700"
+                                  onClick={() => void revokeInvitation(invitation)}
+                                  type="button"
+                                >
+                                  Revoke
+                                </button>
+                              )}
                             </div>
                           )}
                         </td>

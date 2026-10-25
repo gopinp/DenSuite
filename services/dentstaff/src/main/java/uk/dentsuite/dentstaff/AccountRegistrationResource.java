@@ -42,6 +42,8 @@ public class AccountRegistrationResource {
     private static final Logger LOG = Logger.getLogger(AccountRegistrationResource.class);
     private static final Pattern USERNAME_PATTERN = Pattern.compile("[a-zA-Z0-9._-]{3,80}");
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]{1,64}@[^\\s@]{1,255}\\.[^\\s@]{2,}$");
+    private static final java.util.Set<String> EMPLOYEE_JOB_ROLES =
+            java.util.Set.of("DENTIST", "DENTAL_NURSE", "DENTAL_RECEPTIONIST");
     private static final Pattern PRACTICE_NAME_PATTERN = Pattern.compile("[^\\p{Cntrl}]{2,160}");
     private static final Pattern ADDRESS_TEXT_PATTERN = Pattern.compile("[^\\p{Cntrl}]{1,160}");
 
@@ -56,6 +58,9 @@ public class AccountRegistrationResource {
 
     @Inject
     JsonWebToken accessToken;
+
+    @Inject
+    CodeVault codeVault;
 
     @ConfigProperty(name = "dentsuite.registration.employer-code", defaultValue = "")
     String employerCode;
@@ -95,6 +100,11 @@ public class AccountRegistrationResource {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
         String accountType = request.accountType().trim().toUpperCase(Locale.ROOT);
         String joinCode = request.joinCode().trim();
+        String firstName = request.firstName() == null ? "" : request.firstName().trim();
+        String lastName = request.lastName() == null ? "" : request.lastName().trim();
+        if (firstName.isEmpty() || firstName.length() > 80 || lastName.isEmpty() || lastName.length() > 80) {
+            return error(Response.Status.BAD_REQUEST, "Enter your first name and last name.");
+        }
         if (!USERNAME_PATTERN.matcher(username).matches()) {
             return error(Response.Status.BAD_REQUEST,
                     "Username must be 3–80 characters and use letters, numbers, dots, underscores, or hyphens.");
@@ -157,6 +167,8 @@ public class AccountRegistrationResource {
                 createdKeycloakUserId = keycloakAdminClient.createUser(
                         username,
                         email,
+                        firstName,
+                        lastName,
                         request.password(),
                         accountType,
                         accountType.equals("EMPLOYEE") && code.practiceManager());
@@ -168,7 +180,8 @@ public class AccountRegistrationResource {
                         email,
                         accountType,
                         groupId,
-                        practiceId);
+                        practiceId,
+                        accountType.equals("EMPLOYEE") ? code.jobRole() : null);
                 consumeCode(connection, RegistrationCodeSupport.hash(joinCode), username);
                 connection.commit();
 
@@ -228,8 +241,11 @@ public class AccountRegistrationResource {
                     "SELECT p.id, p.name, p.address_line1, p.address_line2, p.city, p.region, "
                             + "p.postcode, p.country, pg.practice_setup "
                             + "FROM practices p JOIN practice_groups pg ON pg.id = p.practice_group_id "
-                            + "WHERE p.practice_group_id = ? ORDER BY p.name")) {
+                            + "WHERE p.practice_group_id = ? AND (? IS NULL OR p.id = ?) ORDER BY p.name")) {
+                UUID onlyPractice = account.accountType().equals("EMPLOYER") ? null : account.practiceId();
                 statement.setObject(1, account.practiceGroupId());
+                statement.setObject(2, onlyPractice);
+                statement.setObject(3, onlyPractice);
                 try (ResultSet result = statement.executeQuery()) {
                     List<PracticeSummary> practices = new ArrayList<>();
                     while (result.next()) {
@@ -397,16 +413,20 @@ public class AccountRegistrationResource {
             return error(Response.Status.BAD_REQUEST, "Select a valid practice.");
         }
         boolean practiceManager = Boolean.TRUE.equals(request.practiceManager());
-        String managerEmail = request.managerEmail() == null
+        String rawEmail = request.email() != null ? request.email() : request.managerEmail();
+        String managerEmail = rawEmail == null || rawEmail.isBlank()
                 ? null
-                : request.managerEmail().trim().toLowerCase(Locale.ROOT);
-        if (practiceManager && (managerEmail == null
-                || managerEmail.length() > 254
-                || !EMAIL_PATTERN.matcher(managerEmail).matches())) {
-            return error(Response.Status.BAD_REQUEST, "Enter a valid practice manager email address.");
+                : rawEmail.trim().toLowerCase(Locale.ROOT);
+        String jobRole = request.jobRole() == null ? null : request.jobRole().trim().toUpperCase(Locale.ROOT);
+        if (practiceManager) {
+            jobRole = "PRACTICE_MANAGER";
+        } else if (jobRole == null || !EMPLOYEE_JOB_ROLES.contains(jobRole)) {
+            return error(Response.Status.BAD_REQUEST, "Choose Dentist, Dental nurse or Dental receptionist.");
         }
-        if (!practiceManager && request.managerEmail() != null) {
-            return error(Response.Status.BAD_REQUEST, "A manager email is only used for manager invitations.");
+        if (managerEmail == null
+                || managerEmail.length() > 254
+                || !EMAIL_PATTERN.matcher(managerEmail).matches()) {
+            return error(Response.Status.BAD_REQUEST, "Enter a valid email address for the person being invited.");
         }
         UUID practiceId;
         try {
@@ -430,25 +450,28 @@ public class AccountRegistrationResource {
                             "Only the practice owner can create a practice manager code.");
                 }
                 String practiceName = practiceNameIfOwned(connection, account.practiceGroupId(), practiceId);
-                if (practiceName == null) {
+                if (practiceName == null
+                        || (!account.accountType().equals("EMPLOYER") && !practiceId.equals(account.practiceId()))) {
                     connection.rollback();
-                    return error(Response.Status.FORBIDDEN, "You can only invite employees to your own practice group.");
+                    return error(Response.Status.FORBIDDEN, "You can only invite employees to your own practice.");
                 }
 
                 String code = RegistrationCodeSupport.generateCode();
                 Instant expiresAt = Instant.now().plus(7, ChronoUnit.DAYS);
                 try (PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO registration_codes "
-                                + "(code_hash, account_type, practice_group_id, practice_id, issued_by, "
-                                + "expires_at, practice_manager, invite_email) "
-                                + "VALUES (?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?)")) {
+                                + "(code_hash, code_encrypted, account_type, practice_group_id, practice_id, issued_by, "
+                                + "expires_at, practice_manager, invite_email, job_role) "
+                                + "VALUES (?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?)")) {
                     statement.setString(1, RegistrationCodeSupport.hash(code));
-                    statement.setObject(2, account.practiceGroupId());
-                    statement.setObject(3, practiceId);
-                    statement.setString(4, identity.getPrincipal().getName());
-                    statement.setTimestamp(5, Timestamp.from(expiresAt));
-                    statement.setBoolean(6, practiceManager);
-                    statement.setString(7, managerEmail);
+                    statement.setString(2, codeVault.encrypt(code));
+                    statement.setObject(3, account.practiceGroupId());
+                    statement.setObject(4, practiceId);
+                    statement.setString(5, identity.getPrincipal().getName());
+                    statement.setTimestamp(6, Timestamp.from(expiresAt));
+                    statement.setBoolean(7, practiceManager);
+                    statement.setString(8, managerEmail);
+                    statement.setString(9, jobRole);
                     statement.executeUpdate();
                 }
                 connection.commit();
@@ -469,7 +492,7 @@ public class AccountRegistrationResource {
     private static RegistrationCode lockRegistrationCode(Connection connection, String codeHash) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT account_type, practice_group_id, practice_id, employer_email, organization_name, "
-                        + "practice_setup, practice_manager, invite_email FROM registration_codes "
+                        + "practice_setup, practice_manager, invite_email, job_role FROM registration_codes "
                         + "WHERE code_hash = ? AND active = TRUE AND used_at IS NULL "
                         + "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) FOR UPDATE")) {
             statement.setString(1, codeHash);
@@ -485,7 +508,8 @@ public class AccountRegistrationResource {
                         result.getString("organization_name"),
                         result.getString("practice_setup"),
                         result.getBoolean("practice_manager"),
-                        result.getString("invite_email"));
+                        result.getString("invite_email"),
+                        result.getString("job_role"));
             }
         }
     }
@@ -592,11 +616,12 @@ public class AccountRegistrationResource {
             String email,
             String accountType,
             UUID groupId,
-            UUID practiceId) throws SQLException {
+            UUID practiceId,
+            String jobRole) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO accounts "
-                        + "(id, keycloak_user_id, username, email, account_type, practice_group_id, practice_id) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?)")) {
+                        + "(id, keycloak_user_id, username, email, account_type, practice_group_id, practice_id, job_role) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setObject(1, id);
             statement.setString(2, keycloakUserId);
             statement.setString(3, username);
@@ -604,6 +629,7 @@ public class AccountRegistrationResource {
             statement.setString(5, accountType);
             statement.setObject(6, groupId);
             statement.setObject(7, practiceId);
+            statement.setString(8, jobRole);
             statement.executeUpdate();
         }
     }
@@ -623,7 +649,7 @@ public class AccountRegistrationResource {
 
     private Account findAccount(Connection connection) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
-                "SELECT practice_group_id, account_type FROM accounts WHERE keycloak_user_id = ?")) {
+                "SELECT practice_group_id, practice_id, account_type FROM accounts WHERE keycloak_user_id = ?")) {
             statement.setString(1, accessToken.getSubject());
             try (ResultSet result = statement.executeQuery()) {
                 if (!result.next()) {
@@ -631,6 +657,7 @@ public class AccountRegistrationResource {
                 }
                 return new Account(
                         result.getObject("practice_group_id", UUID.class),
+                        result.getObject("practice_id", UUID.class),
                         result.getString("account_type"));
             }
         }
@@ -662,6 +689,8 @@ public class AccountRegistrationResource {
 
     public record RegisterRequest(
             String username,
+            String firstName,
+            String lastName,
             String email,
             String password,
             String joinCode,
@@ -678,7 +707,12 @@ public class AccountRegistrationResource {
             String country) {
     }
 
-    public record InvitationRequest(String practiceId, Boolean practiceManager, String managerEmail) {
+    public record InvitationRequest(
+            String practiceId,
+            Boolean practiceManager,
+            String managerEmail,
+            String email,
+            String jobRole) {
     }
 
     public record InvitationResponse(String code, String practiceName, String expiresAt) {
@@ -707,9 +741,10 @@ public class AccountRegistrationResource {
             String organizationName,
             String practiceSetup,
             boolean practiceManager,
-            String inviteEmail) {
+            String inviteEmail,
+            String jobRole) {
     }
 
-    private record Account(UUID practiceGroupId, String accountType) {
+    private record Account(UUID practiceGroupId, UUID practiceId, String accountType) {
     }
 }

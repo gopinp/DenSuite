@@ -41,6 +41,8 @@ public class KeycloakAdminClient {
     public String createUser(
             String username,
             String email,
+            String firstName,
+            String lastName,
             String password,
             String accountType,
             boolean practiceManager) {
@@ -49,6 +51,8 @@ public class KeycloakAdminClient {
         Map<String, Object> user = Map.of(
                 "username", username,
                 "email", email,
+                "firstName", firstName,
+                "lastName", lastName,
                 "enabled", true,
                 "credentials", List.of(Map.of(
                         "type", "password",

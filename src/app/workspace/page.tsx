@@ -1,5 +1,6 @@
 import Link from "next/link";
 import BrandMark from "../../components/BrandMark";
+import Greeting from "../../components/Greeting";
 import PracticeSetupNotice from "../../components/PracticeSetupNotice";
 
 type ModuleIconName = "staff" | "stock" | "rota" | "clinical";
@@ -99,7 +100,7 @@ export default function HomePage() {
           <section className="welcome-row">
             <div>
               <p className="eyebrow">Your Dental Practice Hub</p>
-              <h1>Good morning, Deepa <span className="wave">✳</span></h1>
+              <h1><Greeting /> <span className="wave">✳</span></h1>
               <p className="welcome-subtitle">Everything your team needs, all in one place.</p>
             </div>
             <div className="flex flex-wrap gap-3">

@@ -69,6 +69,13 @@ API creates the identity in Keycloak and stores its practice-scoped profile in P
 The hosted sign-in page uses the Den Suite theme and displays username and password together, with
 a registration link back to the Den Suite account-creation flow.
 
+`CODE_ENCRYPTION_KEY` (in `.env`) encrypts registration codes at rest so Den Suite admins can view,
+reset and resend them from `/admin`, and edit a group's license (single/multiple practices). Keep
+the key stable: if it is lost, previously issued codes can no longer be displayed. Practice owners
+create manager codes; practice managers create codes only for Dentists, Dental nurses and Dental
+receptionists in their own practice. Colleagues enter their first and last name when registering,
+and the workspace greeting uses their first name.
+
 `EMPLOYER_JOIN_CODE` is a one-use bootstrap code for the first employer account. After an initial
 account has been created, assign it the `DENTSUITE_ADMIN` realm role in the Den Suite Keycloak
 realm: open the Keycloak Admin Console, select the `dentsuite` realm, open the user, choose
