@@ -25,3 +25,5 @@ apps/mobile/ios
 # Local environment
 .env.*
 !.env.example
+
+*.tsbuildinfo
