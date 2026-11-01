@@ -249,7 +249,8 @@ public class AccountRegistrationResource {
                             + "p.postcode, p.country, pg.practice_setup, p.employee_number_prefix, "
                             + "p.employee_number_separator, p.employee_number_digits, p.next_employee_number "
                             + "FROM practices p JOIN practice_groups pg ON pg.id = p.practice_group_id "
-                            + "WHERE p.practice_group_id = ? AND (? IS NULL OR p.id = ?) ORDER BY p.name")) {
+                            + "WHERE p.practice_group_id = ? AND (CAST(? AS uuid) IS NULL OR p.id = CAST(? AS uuid)) "
+                            + "ORDER BY p.name")) {
                 UUID onlyPractice = account.accountType().equals("EMPLOYER") ? null : account.practiceId();
                 statement.setObject(1, account.practiceGroupId());
                 statement.setObject(2, onlyPractice);
