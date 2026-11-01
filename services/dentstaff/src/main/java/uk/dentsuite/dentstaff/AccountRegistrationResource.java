@@ -755,6 +755,7 @@ public class AccountRegistrationResource {
             statement.setObject(7, practiceId);
             statement.setString(8, jobRole);
             statement.setString(9, employeeNumber);
+            statement.executeUpdate();
         }
     }
 

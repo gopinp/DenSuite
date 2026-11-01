@@ -1,6 +1,7 @@
 import Link from "next/link";
 import BrandMark from "../../components/BrandMark";
 import Greeting from "../../components/Greeting";
+import ManagePracticesLabel from "../../components/ManagePracticesLabel";
 import PracticeSetupNotice from "../../components/PracticeSetupNotice";
 
 type ModuleIconName = "staff" | "stock" | "rota" | "clinical";
@@ -105,7 +106,7 @@ export default function HomePage() {
             </div>
             <div className="flex flex-wrap gap-3">
               <Link className="button-primary" href="/hr/practices">
-                <Icon name="staff" size={17} /> Manage practices
+                <Icon name="staff" size={17} /> <ManagePracticesLabel />
               </Link>
               <Link className="button-primary" href="/hr/rota">
                 <Icon name="calendar" size={17} /> View this week&apos;s rota

@@ -121,6 +121,7 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
   const [rolesResolved, setRolesResolved] = useState(false);
+  const [isManagerOnly, setIsManagerOnly] = useState(false);
   const [canSelectPractice, setCanSelectPractice] = useState(false);
   const [practices, setPractices] = useState<PracticeSummary[]>([]);
   const [selectedPracticeId, setSelectedPracticeId] = useState("");
@@ -140,6 +141,9 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
         setIsAdmin(admin);
         setRolesResolved(true);
         setCanSelectPractice(allowed);
+        setIsManagerOnly(
+          keycloak.hasRealmRole("PRACTICE_MANAGER") && !keycloak.hasRealmRole("EMPLOYER"),
+        );
         if (!allowed) {
           setPracticesLoading(false);
           return;
@@ -227,7 +231,7 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
     );
   }
 
-  const title = pageTitles[pathname] ?? "Den Suite";
+  const title = (pathname === "/hr/practices" && isManagerOnly ? "Practice" : pageTitles[pathname]) ?? "Den Suite";
   const visibleLinks = [...workspaceLinks, ...productLinks, ...teamLinks];
   const selectedPractice = practices.find((practice) => practice.id === selectedPracticeId) ?? null;
 
@@ -308,7 +312,12 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
         <p className="nav-caption">WORKSPACE</p>
         <nav className="side-nav" aria-label="Workspace navigation">
           {workspaceLinks.map((item) => (
-            <SideLink key={item.href} {...item} pathname={pathname} />
+            <SideLink
+              key={item.href}
+              {...item}
+              label={item.href === "/hr/practices" && isManagerOnly ? "Practice" : item.label}
+              pathname={pathname}
+            />
           ))}
         </nav>
 
