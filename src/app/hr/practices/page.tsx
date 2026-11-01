@@ -13,12 +13,17 @@ type Practice = {
   postcode: string | null;
   country: string | null;
   practiceSetup: "SINGLE" | "MULTIPLE";
+  employeeNumberPrefix: string;
+  employeeNumberSeparator: string;
+  employeeNumberDigits: number;
+  nextEmployeeNumber: string;
 };
 
 type Invitation = {
   code: string;
   practiceName: string;
   expiresAt: string;
+  employeeNumber: string;
 };
 
 type PracticesResult = {
@@ -40,6 +45,11 @@ export default function PracticesPage() {
   const [postcode, setPostcode] = useState("");
   const [country, setCountry] = useState("United Kingdom");
   const [managerEmail, setManagerEmail] = useState("");
+  const [managerNumber, setManagerNumber] = useState("");
+  const [numberPrefix, setNumberPrefix] = useState("EMP");
+  const [numberSeparator, setNumberSeparator] = useState("-");
+  const [numberDigits, setNumberDigits] = useState(4);
+  const [ownerNumber, setOwnerNumber] = useState("");
   const [selfManaging, setSelfManaging] = useState(false);
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [message, setMessage] = useState("");
@@ -106,7 +116,13 @@ export default function PracticesPage() {
           Authorization: `Bearer ${keycloak.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ name, addressLine1, addressLine2, city, region, postcode, country }),
+        body: JSON.stringify({
+          name, addressLine1, addressLine2, city, region, postcode, country,
+          employeeNumberPrefix: numberPrefix,
+          employeeNumberSeparator: numberSeparator,
+          employeeNumberDigits: numberDigits,
+          ownerEmployeeNumber: editingPracticeId ? undefined : ownerNumber,
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -118,6 +134,7 @@ export default function PracticesPage() {
       setCity("");
       setRegion("");
       setPostcode("");
+      setOwnerNumber("");
       const wasEditing = Boolean(editingPracticeId);
       setEditingPracticeId("");
       await loadPractices();
@@ -145,13 +162,15 @@ export default function PracticesPage() {
           Authorization: `Bearer ${keycloak.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ practiceId, practiceManager: true, managerEmail }),
+        body: JSON.stringify({ practiceId, practiceManager: true, managerEmail, employeeNumber: managerNumber }),
       });
       const result = await response.json();
       if (!response.ok) {
         throw new Error(result.message ?? "The practice manager code could not be created.");
       }
       setInvitation(result as Invitation);
+      setManagerNumber("");
+      await loadPractices();
     } catch (error) {
       setMessage(error instanceof Error
         ? error.message
@@ -180,6 +199,9 @@ export default function PracticesPage() {
     setRegion(practice.region ?? "");
     setPostcode(practice.postcode ?? "");
     setCountry(practice.country ?? "United Kingdom");
+    setNumberPrefix(practice.employeeNumberPrefix);
+    setNumberSeparator(practice.employeeNumberSeparator);
+    setNumberDigits(practice.employeeNumberDigits);
     setMessage("");
   }
 
@@ -317,6 +339,53 @@ export default function PracticesPage() {
                     <input autoComplete="country-name" className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 px-3"
                       maxLength={80} onChange={(event) => setCountry(event.target.value)} required value={country} />
                   </label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 md:col-span-2">
+                    <h3 className="text-sm font-semibold text-slate-900">Employee number format</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-600">
+                      New employees get the next number in this format. Anyone creating an employee can
+                      replace it with an existing employee number.
+                    </p>
+                    <div className="mt-3 grid gap-4 sm:grid-cols-4">
+                      <label className="text-sm font-medium text-slate-700">
+                        Prefix
+                        <input className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3"
+                          maxLength={10} onChange={(event) => setNumberPrefix(event.target.value.replace(/[^A-Za-z0-9]/g, ""))}
+                          required value={numberPrefix} />
+                      </label>
+                      <label className="text-sm font-medium text-slate-700">
+                        Separator
+                        <select className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3"
+                          onChange={(event) => setNumberSeparator(event.target.value)} value={numberSeparator}>
+                          <option value="-">Hyphen (-)</option>
+                          <option value="/">Slash (/)</option>
+                          <option value=".">Dot (.)</option>
+                          <option value="_">Underscore (_)</option>
+                          <option value="">None</option>
+                        </select>
+                      </label>
+                      <label className="text-sm font-medium text-slate-700">
+                        Number length
+                        <select className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3"
+                          onChange={(event) => setNumberDigits(Number(event.target.value))} value={numberDigits}>
+                          {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
+                            <option key={count} value={count}>{count}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <p className="self-end pb-3 text-sm text-slate-700">
+                        Preview: <strong>{numberPrefix}{numberSeparator}{"1".padStart(numberDigits, "0")}</strong>
+                      </p>
+                    </div>
+                    {!editingPracticeId && (
+                      <label className="mt-4 block text-sm font-medium text-slate-700">
+                        Your own employee number (optional)
+                        <input className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 sm:max-w-xs"
+                          maxLength={30} onChange={(event) => setOwnerNumber(event.target.value)}
+                          placeholder={`Leave blank to use ${numberPrefix}${numberSeparator}${"1".padStart(numberDigits, "0")}`}
+                          value={ownerNumber} />
+                      </label>
+                    )}
+                  </div>
                   <div className="flex items-end">
                     <div className="flex flex-wrap gap-3">
                       <button className="min-h-11 rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
@@ -396,6 +465,13 @@ export default function PracticesPage() {
                         id="manager-email" maxLength={254} onChange={(event) => setManagerEmail(event.target.value)}
                         required type="email" value={managerEmail} />
                     </label>
+                    <label className="block min-w-64 text-sm font-medium text-slate-700" htmlFor="manager-number">
+                      Employee number (optional)
+                      <input className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 px-3"
+                        id="manager-number" maxLength={30} onChange={(event) => setManagerNumber(event.target.value)}
+                        placeholder={practices.find((practice) => practice.id === practiceId)?.nextEmployeeNumber ?? ""}
+                        value={managerNumber} />
+                    </label>
                     <button className="min-h-11 rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white hover:bg-violet-800 disabled:opacity-60"
                       disabled={submitting || !practiceId} type="submit">
                       {submitting ? "Creating code…" : "Create manager code"}
@@ -408,7 +484,7 @@ export default function PracticesPage() {
               {invitation && (
                 <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
                   <p className="text-sm font-semibold text-emerald-950">
-                    Manager code for {invitation.practiceName}
+                    Manager code for {invitation.practiceName} (employee number {invitation.employeeNumber})
                   </p>
                   <code className="mt-3 block break-all rounded-lg bg-white px-3 py-3 font-mono text-sm text-slate-900">
                     {invitation.code}

@@ -162,6 +162,12 @@ public class AccountRegistrationResource {
                     groupId = code.practiceGroupId();
                     practiceId = code.practiceId();
                     practiceName(connection, groupId, practiceId);
+                    if (code.employeeNumber() != null
+                            && EmployeeNumbers.usedByAccount(connection, groupId, code.employeeNumber())) {
+                        connection.rollback();
+                        return error(Response.Status.CONFLICT,
+                                "The employee number on this code is already in use. Ask for a new code.");
+                    }
                 }
 
                 createdKeycloakUserId = keycloakAdminClient.createUser(
@@ -181,7 +187,8 @@ public class AccountRegistrationResource {
                         accountType,
                         groupId,
                         practiceId,
-                        accountType.equals("EMPLOYEE") ? code.jobRole() : null);
+                        accountType.equals("EMPLOYEE") ? code.jobRole() : null,
+                        accountType.equals("EMPLOYEE") ? code.employeeNumber() : null);
                 consumeCode(connection, RegistrationCodeSupport.hash(joinCode), username);
                 connection.commit();
 
@@ -239,7 +246,8 @@ public class AccountRegistrationResource {
             }
             try (PreparedStatement statement = connection.prepareStatement(
                     "SELECT p.id, p.name, p.address_line1, p.address_line2, p.city, p.region, "
-                            + "p.postcode, p.country, pg.practice_setup "
+                            + "p.postcode, p.country, pg.practice_setup, p.employee_number_prefix, "
+                            + "p.employee_number_separator, p.employee_number_digits, p.next_employee_number "
                             + "FROM practices p JOIN practice_groups pg ON pg.id = p.practice_group_id "
                             + "WHERE p.practice_group_id = ? AND (? IS NULL OR p.id = ?) ORDER BY p.name")) {
                 UUID onlyPractice = account.accountType().equals("EMPLOYER") ? null : account.practiceId();
@@ -249,6 +257,11 @@ public class AccountRegistrationResource {
                 try (ResultSet result = statement.executeQuery()) {
                     List<PracticeSummary> practices = new ArrayList<>();
                     while (result.next()) {
+                        EmployeeNumbers.Format format = new EmployeeNumbers.Format(
+                                result.getString("employee_number_prefix"),
+                                result.getString("employee_number_separator"),
+                                result.getInt("employee_number_digits"),
+                                result.getInt("next_employee_number"));
                         practices.add(new PracticeSummary(
                                 result.getObject("id", UUID.class).toString(),
                                 result.getString("name"),
@@ -258,7 +271,12 @@ public class AccountRegistrationResource {
                                 result.getString("region"),
                                 result.getString("postcode"),
                                 result.getString("country"),
-                                result.getString("practice_setup")));
+                                result.getString("practice_setup"),
+                                format.prefix(),
+                                format.separator(),
+                                format.digits(),
+                                EmployeeNumbers.nextAvailable(connection, account.practiceGroupId(), format)
+                                        .number()));
                     }
                     return Response.ok(new PracticeListResponse(setup, practices)).build();
                 }
@@ -275,6 +293,15 @@ public class AccountRegistrationResource {
     public Response addPractice(AddPracticeRequest request) {
         Response validationError = validatePracticeDetails(request);
         if (validationError != null) return validationError;
+        String formatError = EmployeeNumbers.validateFormat(
+                request.employeeNumberPrefix(), request.employeeNumberSeparator(), request.employeeNumberDigits());
+        if (formatError != null) return error(Response.Status.BAD_REQUEST, formatError);
+        String ownerNumber;
+        try {
+            ownerNumber = EmployeeNumbers.cleanCustom(request.ownerEmployeeNumber());
+        } catch (IllegalArgumentException exception) {
+            return error(Response.Status.BAD_REQUEST, exception.getMessage());
+        }
         String name = request.name().trim();
 
         try (Connection connection = dataSource.getConnection()) {
@@ -314,12 +341,60 @@ public class AccountRegistrationResource {
             try {
                 createPractice(connection, practiceId, account.practiceGroupId(), name);
                 savePracticeAddress(connection, practiceId, request);
+                String prefix = request.employeeNumberPrefix() == null || request.employeeNumberPrefix().isBlank()
+                        ? "EMP" : request.employeeNumberPrefix().trim();
+                String separator = request.employeeNumberSeparator() == null ? "-" : request.employeeNumberSeparator();
+                int digits = request.employeeNumberDigits() == null ? 4 : request.employeeNumberDigits();
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "UPDATE practices SET employee_number_prefix = ?, employee_number_separator = ?, "
+                                + "employee_number_digits = ? WHERE id = ?")) {
+                    statement.setString(1, prefix);
+                    statement.setString(2, separator);
+                    statement.setInt(3, digits);
+                    statement.setObject(4, practiceId);
+                    statement.executeUpdate();
+                }
+                // The owner gets their number when the first practice is set up.
+                String assignedOwnerNumber = null;
+                try (PreparedStatement statement = connection.prepareStatement(
+                        "SELECT employee_number FROM accounts WHERE keycloak_user_id = ?")) {
+                    statement.setString(1, accessToken.getSubject());
+                    try (ResultSet result = statement.executeQuery()) {
+                        if (result.next() && result.getString(1) == null) {
+                            assignedOwnerNumber = "";
+                        }
+                    }
+                }
+                if (assignedOwnerNumber != null) {
+                    EmployeeNumbers.Format format = EmployeeNumbers.readFormat(connection, practiceId, true);
+                    if (ownerNumber != null) {
+                        if (EmployeeNumbers.isTaken(connection, account.practiceGroupId(), ownerNumber)) {
+                            connection.rollback();
+                            return error(Response.Status.CONFLICT, "That employee number is already in use.");
+                        }
+                        assignedOwnerNumber = ownerNumber;
+                    } else {
+                        EmployeeNumbers.Allocation allocation =
+                                EmployeeNumbers.nextAvailable(connection, account.practiceGroupId(), format);
+                        assignedOwnerNumber = allocation.number();
+                        EmployeeNumbers.saveNextCounter(connection, practiceId, allocation.nextCounter());
+                    }
+                    try (PreparedStatement statement = connection.prepareStatement(
+                            "UPDATE accounts SET employee_number = ? WHERE keycloak_user_id = ?")) {
+                        statement.setString(1, assignedOwnerNumber);
+                        statement.setString(2, accessToken.getSubject());
+                        statement.executeUpdate();
+                    }
+                }
+                EmployeeNumbers.Format saved = EmployeeNumbers.readFormat(connection, practiceId, false);
+                String preview = EmployeeNumbers.nextAvailable(connection, account.practiceGroupId(), saved).number();
                 connection.commit();
                 return Response.status(Response.Status.CREATED)
                         .entity(new PracticeSummary(
                                 practiceId.toString(), name, request.addressLine1().trim(),
                                 request.addressLine2(), request.city().trim(), request.region(),
-                                request.postcode().trim(), request.country().trim(), license))
+                                request.postcode().trim(), request.country().trim(), license,
+                                saved.prefix(), saved.separator(), saved.digits(), preview))
                         .build();
             } catch (SQLException exception) {
                 rollback(connection, exception);
@@ -370,6 +445,26 @@ public class AccountRegistrationResource {
                 if (statement.executeUpdate() != 1) {
                     return error(Response.Status.NOT_FOUND, "That practice was not found in your group.");
                 }
+            }
+            String formatError = EmployeeNumbers.validateFormat(
+                    request.employeeNumberPrefix(), request.employeeNumberSeparator(),
+                    request.employeeNumberDigits());
+            if (formatError != null) {
+                return error(Response.Status.BAD_REQUEST, formatError);
+            }
+            try (PreparedStatement statement = connection.prepareStatement(
+                    "UPDATE practices SET "
+                            + "employee_number_prefix = COALESCE(?, employee_number_prefix), "
+                            + "employee_number_separator = COALESCE(?, employee_number_separator), "
+                            + "employee_number_digits = COALESCE(?, employee_number_digits) "
+                            + "WHERE id = ? AND practice_group_id = ?")) {
+                String prefix = request.employeeNumberPrefix();
+                statement.setString(1, prefix == null || prefix.isBlank() ? null : prefix.trim());
+                statement.setString(2, request.employeeNumberSeparator());
+                statement.setObject(3, request.employeeNumberDigits());
+                statement.setObject(4, practiceId);
+                statement.setObject(5, account.practiceGroupId());
+                statement.executeUpdate();
             }
             return Response.ok(Map.of("id", practiceId.toString(), "name", request.name().trim())).build();
         } catch (SQLException exception) {
@@ -456,13 +551,36 @@ public class AccountRegistrationResource {
                     return error(Response.Status.FORBIDDEN, "You can only invite employees to your own practice.");
                 }
 
+                String customNumber;
+                try {
+                    customNumber = EmployeeNumbers.cleanCustom(request.employeeNumber());
+                } catch (IllegalArgumentException exception) {
+                    connection.rollback();
+                    return error(Response.Status.BAD_REQUEST, exception.getMessage());
+                }
+                EmployeeNumbers.Format numberFormat = EmployeeNumbers.readFormat(connection, practiceId, true);
+                String employeeNumber;
+                if (customNumber != null) {
+                    if (EmployeeNumbers.isTaken(connection, account.practiceGroupId(), customNumber)) {
+                        connection.rollback();
+                        return error(Response.Status.CONFLICT,
+                                "That employee number is already in use in your group.");
+                    }
+                    employeeNumber = customNumber;
+                } else {
+                    EmployeeNumbers.Allocation allocation =
+                            EmployeeNumbers.nextAvailable(connection, account.practiceGroupId(), numberFormat);
+                    employeeNumber = allocation.number();
+                    EmployeeNumbers.saveNextCounter(connection, practiceId, allocation.nextCounter());
+                }
+
                 String code = RegistrationCodeSupport.generateCode();
                 Instant expiresAt = Instant.now().plus(7, ChronoUnit.DAYS);
                 try (PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO registration_codes "
                                 + "(code_hash, code_encrypted, account_type, practice_group_id, practice_id, issued_by, "
-                                + "expires_at, practice_manager, invite_email, job_role) "
-                                + "VALUES (?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?)")) {
+                                + "expires_at, practice_manager, invite_email, job_role, employee_number) "
+                                + "VALUES (?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?, ?)")) {
                     statement.setString(1, RegistrationCodeSupport.hash(code));
                     statement.setString(2, codeVault.encrypt(code));
                     statement.setObject(3, account.practiceGroupId());
@@ -472,11 +590,12 @@ public class AccountRegistrationResource {
                     statement.setBoolean(7, practiceManager);
                     statement.setString(8, managerEmail);
                     statement.setString(9, jobRole);
+                    statement.setString(10, employeeNumber);
                     statement.executeUpdate();
                 }
                 connection.commit();
                 return Response.status(Response.Status.CREATED)
-                        .entity(new InvitationResponse(code, practiceName, expiresAt.toString()))
+                        .entity(new InvitationResponse(code, practiceName, expiresAt.toString(), employeeNumber))
                         .build();
             } catch (SQLException exception) {
                 rollback(connection, exception);
@@ -492,7 +611,8 @@ public class AccountRegistrationResource {
     private static RegistrationCode lockRegistrationCode(Connection connection, String codeHash) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "SELECT account_type, practice_group_id, practice_id, employer_email, organization_name, "
-                        + "practice_setup, practice_manager, invite_email, job_role FROM registration_codes "
+                        + "practice_setup, practice_manager, invite_email, job_role, employee_number "
+                        + "FROM registration_codes "
                         + "WHERE code_hash = ? AND active = TRUE AND used_at IS NULL "
                         + "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) FOR UPDATE")) {
             statement.setString(1, codeHash);
@@ -509,7 +629,8 @@ public class AccountRegistrationResource {
                         result.getString("practice_setup"),
                         result.getBoolean("practice_manager"),
                         result.getString("invite_email"),
-                        result.getString("job_role"));
+                        result.getString("job_role"),
+                        result.getString("employee_number"));
             }
         }
     }
@@ -617,11 +738,13 @@ public class AccountRegistrationResource {
             String accountType,
             UUID groupId,
             UUID practiceId,
-            String jobRole) throws SQLException {
+            String jobRole,
+            String employeeNumber) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO accounts "
-                        + "(id, keycloak_user_id, username, email, account_type, practice_group_id, practice_id, job_role) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "(id, keycloak_user_id, username, email, account_type, practice_group_id, practice_id, "
+                        + "job_role, employee_number) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setObject(1, id);
             statement.setString(2, keycloakUserId);
             statement.setString(3, username);
@@ -630,7 +753,7 @@ public class AccountRegistrationResource {
             statement.setObject(6, groupId);
             statement.setObject(7, practiceId);
             statement.setString(8, jobRole);
-            statement.executeUpdate();
+            statement.setString(9, employeeNumber);
         }
     }
 
@@ -704,7 +827,11 @@ public class AccountRegistrationResource {
             String city,
             String region,
             String postcode,
-            String country) {
+            String country,
+            String employeeNumberPrefix,
+            String employeeNumberSeparator,
+            Integer employeeNumberDigits,
+            String ownerEmployeeNumber) {
     }
 
     public record InvitationRequest(
@@ -712,10 +839,11 @@ public class AccountRegistrationResource {
             Boolean practiceManager,
             String managerEmail,
             String email,
-            String jobRole) {
+            String jobRole,
+            String employeeNumber) {
     }
 
-    public record InvitationResponse(String code, String practiceName, String expiresAt) {
+    public record InvitationResponse(String code, String practiceName, String expiresAt, String employeeNumber) {
     }
 
     public record PracticeSummary(
@@ -727,7 +855,11 @@ public class AccountRegistrationResource {
             String region,
             String postcode,
             String country,
-            String practiceSetup) {
+            String practiceSetup,
+            String employeeNumberPrefix,
+            String employeeNumberSeparator,
+            int employeeNumberDigits,
+            String nextEmployeeNumber) {
     }
 
     public record PracticeListResponse(String practiceSetup, List<PracticeSummary> practices) {
@@ -742,7 +874,8 @@ public class AccountRegistrationResource {
             String practiceSetup,
             boolean practiceManager,
             String inviteEmail,
-            String jobRole) {
+            String jobRole,
+            String employeeNumber) {
     }
 
     private record Account(UUID practiceGroupId, UUID practiceId, String accountType) {

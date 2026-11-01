@@ -308,8 +308,10 @@ public class PracticeAdministrationResource {
                 boolean practiceManager;
                 String inviteEmail;
                 String jobRole;
+                String employeeNumber;
                 try (PreparedStatement statement = connection.prepareStatement(
-                        "SELECT practice_id, practice_manager, invite_email, job_role FROM registration_codes "
+                        "SELECT practice_id, practice_manager, invite_email, job_role, employee_number "
+                                + "FROM registration_codes "
                                 + "WHERE invite_id = ? AND practice_group_id = ? AND account_type = 'EMPLOYEE' "
                                 + "FOR UPDATE")) {
                     statement.setObject(1, inviteId);
@@ -324,6 +326,7 @@ public class PracticeAdministrationResource {
                         practiceManager = result.getBoolean("practice_manager");
                         inviteEmail = result.getString("invite_email");
                         jobRole = result.getString("job_role");
+                        employeeNumber = result.getString("employee_number");
                     }
                 }
                 try (PreparedStatement statement = connection.prepareStatement(
@@ -336,8 +339,8 @@ public class PracticeAdministrationResource {
                 try (PreparedStatement statement = connection.prepareStatement(
                         "INSERT INTO registration_codes "
                                 + "(code_hash, code_encrypted, account_type, practice_group_id, practice_id, issued_by, "
-                                + "expires_at, practice_manager, invite_email, job_role) "
-                                + "VALUES (?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?)")) {
+                                + "expires_at, practice_manager, invite_email, job_role, employee_number) "
+                                + "VALUES (?, ?, 'EMPLOYEE', ?, ?, ?, ?, ?, ?, ?, ?)")) {
                     statement.setString(1, RegistrationCodeSupport.hash(code));
                     statement.setString(2, codeVault.encrypt(code));
                     statement.setObject(3, groupId);
@@ -347,6 +350,7 @@ public class PracticeAdministrationResource {
                     statement.setBoolean(7, practiceManager);
                     statement.setString(8, inviteEmail);
                     statement.setString(9, jobRole);
+                    statement.setString(10, employeeNumber);
                     statement.executeUpdate();
                 }
                 connection.commit();

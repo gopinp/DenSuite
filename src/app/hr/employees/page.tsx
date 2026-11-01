@@ -5,9 +5,9 @@ import { useEffect, useState, type FormEvent } from "react";
 import { getKeycloak, initializeKeycloak } from "../../../lib/keycloak";
 import { usePracticeContext } from "../../../components/PracticeContext";
 
-type Practice = { id: string; name: string };
+type Practice = { id: string; name: string; nextEmployeeNumber: string };
 type PracticesResponse = { practices: Practice[] };
-type Invitation = { code: string; practiceName: string; expiresAt: string };
+type Invitation = { code: string; practiceName: string; expiresAt: string; employeeNumber: string };
 
 const apiBase = process.env.NEXT_PUBLIC_DENTSTAFF_API_URL ?? "http://localhost:8085";
 
@@ -18,6 +18,8 @@ export default function EmployeesPage() {
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [jobRole, setJobRole] = useState("DENTIST");
   const [inviteEmail, setInviteEmail] = useState("");
+  const [employeeNumber, setEmployeeNumber] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -28,7 +30,7 @@ export default function EmployeesPage() {
         await initializeKeycloak();
         const keycloak = getKeycloak();
         await keycloak.updateToken(30);
-        const response = await fetch(`${apiBase}/api/v1/accounts/practices`, {
+        const response = await fetch(`${apiBase}/api/v1/accounts/practices?refresh=${refreshKey}`, {
           headers: { Authorization: `Bearer ${keycloak.token}` },
         });
         const result = await response.json();
@@ -53,7 +55,7 @@ export default function EmployeesPage() {
       }
     }
     void loadPractices();
-  }, [selectedPracticeId, setSelectedPracticeId]);
+  }, [selectedPracticeId, setSelectedPracticeId, refreshKey]);
 
   async function createInvitation(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -70,7 +72,7 @@ export default function EmployeesPage() {
           Authorization: `Bearer ${keycloak.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ practiceId, jobRole, email: inviteEmail }),
+        body: JSON.stringify({ practiceId, jobRole, email: inviteEmail, employeeNumber }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -78,6 +80,8 @@ export default function EmployeesPage() {
       }
       setInvitation(result as Invitation);
       setInviteEmail("");
+      setEmployeeNumber("");
+      setRefreshKey((key) => key + 1);
     } catch (error) {
       setMessage(
         error instanceof Error
@@ -175,8 +179,22 @@ export default function EmployeesPage() {
                 value={inviteEmail}
               />
             </label>
+            <label className="block text-sm font-medium text-slate-700" htmlFor="employee-number">
+              Employee number (optional)
+              <input
+                autoComplete="off"
+                className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 px-3 text-sm"
+                id="employee-number"
+                maxLength={30}
+                onChange={(event) => setEmployeeNumber(event.target.value)}
+                placeholder={practices.find((practice) => practice.id === practiceId)?.nextEmployeeNumber ?? ""}
+                value={employeeNumber}
+              />
+              <span className="mt-1 block text-xs font-normal text-slate-500">
+                Leave blank to use the suggested number, or enter the colleague&apos;s existing employee number.
+              </span>
+            </label>
             <button
-              className="min-h-11 rounded-lg bg-violet-700 px-4 text-sm font-semibold text-white transition hover:bg-violet-800 disabled:cursor-wait disabled:opacity-60"
               disabled={submitting || !practiceId}
               type="submit"
             >
@@ -194,7 +212,7 @@ export default function EmployeesPage() {
         {invitation && (
           <div className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <p className="text-sm font-semibold text-emerald-950">
-              Invite created for {invitation.practiceName}
+              Invite created for {invitation.practiceName} (employee number {invitation.employeeNumber})
             </p>
             <code className="mt-3 block break-all rounded-lg bg-white px-3 py-3 font-mono text-sm text-slate-900">
               {invitation.code}
