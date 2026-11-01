@@ -43,7 +43,7 @@ public class AccountRegistrationResource {
     private static final Pattern USERNAME_PATTERN = Pattern.compile("[a-zA-Z0-9._-]{3,80}");
     private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]{1,64}@[^\\s@]{1,255}\\.[^\\s@]{2,}$");
     private static final java.util.Set<String> EMPLOYEE_JOB_ROLES =
-            java.util.Set.of("DENTIST", "DENTAL_NURSE", "DENTAL_RECEPTIONIST");
+            StaffRoles.EMPLOYEE_ROLES;
     private static final Pattern PRACTICE_NAME_PATTERN = Pattern.compile("[^\\p{Cntrl}]{2,160}");
     private static final Pattern ADDRESS_TEXT_PATTERN = Pattern.compile("[^\\p{Cntrl}]{1,160}");
 
@@ -144,6 +144,15 @@ public class AccountRegistrationResource {
                     return error(Response.Status.BAD_REQUEST,
                             "This practice manager code is tied to a different email address.");
                 }
+                String gdcNumber = null;
+                if (accountType.equals("EMPLOYEE")) {
+                    try {
+                        gdcNumber = StaffRoles.cleanGdc(code.jobRole(), request.gdcNumber());
+                    } catch (IllegalArgumentException exception) {
+                        connection.rollback();
+                        return error(Response.Status.BAD_REQUEST, exception.getMessage());
+                    }
+                }
                 if (accountExists(connection, username, email)) {
                     connection.rollback();
                     return error(Response.Status.CONFLICT, "That username or email address is already registered.");
@@ -188,7 +197,8 @@ public class AccountRegistrationResource {
                         groupId,
                         practiceId,
                         accountType.equals("EMPLOYEE") ? code.jobRole() : null,
-                        accountType.equals("EMPLOYEE") ? code.employeeNumber() : null);
+                        accountType.equals("EMPLOYEE") ? code.employeeNumber() : null,
+                        gdcNumber);
                 consumeCode(connection, RegistrationCodeSupport.hash(joinCode), username);
                 connection.commit();
 
@@ -519,6 +529,12 @@ public class AccountRegistrationResource {
         } else if (jobRole == null || !EMPLOYEE_JOB_ROLES.contains(jobRole)) {
             return error(Response.Status.BAD_REQUEST, "Choose Dentist, Dental nurse or Dental receptionist.");
         }
+        if (!practiceManager && Boolean.TRUE.equals(request.headNurse())) {
+            if (!jobRole.equals("DENTAL_NURSE") && !jobRole.equals("HEAD_NURSE")) {
+                return error(Response.Status.BAD_REQUEST, "Only a dental nurse can be the head nurse.");
+            }
+            jobRole = "HEAD_NURSE";
+        }
         if (managerEmail == null
                 || managerEmail.length() > 254
                 || !EMAIL_PATTERN.matcher(managerEmail).matches()) {
@@ -550,6 +566,12 @@ public class AccountRegistrationResource {
                         || (!account.accountType().equals("EMPLOYER") && !practiceId.equals(account.practiceId()))) {
                     connection.rollback();
                     return error(Response.Status.FORBIDDEN, "You can only invite employees to your own practice.");
+                }
+
+                if (jobRole.equals("HEAD_NURSE") && StaffRoles.headNurseExists(connection, practiceId)) {
+                    connection.rollback();
+                    return error(Response.Status.CONFLICT,
+                            "This practice already has a head nurse (or a pending head nurse invitation).");
                 }
 
                 String customNumber;
@@ -740,12 +762,13 @@ public class AccountRegistrationResource {
             UUID groupId,
             UUID practiceId,
             String jobRole,
-            String employeeNumber) throws SQLException {
+            String employeeNumber,
+            String gdcNumber) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO accounts "
                         + "(id, keycloak_user_id, username, email, account_type, practice_group_id, practice_id, "
-                        + "job_role, employee_number) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+                        + "job_role, employee_number, gdc_number) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
             statement.setObject(1, id);
             statement.setString(2, keycloakUserId);
             statement.setString(3, username);
@@ -755,6 +778,7 @@ public class AccountRegistrationResource {
             statement.setObject(7, practiceId);
             statement.setString(8, jobRole);
             statement.setString(9, employeeNumber);
+            statement.setString(10, gdcNumber);
             statement.executeUpdate();
         }
     }
@@ -819,7 +843,8 @@ public class AccountRegistrationResource {
             String email,
             String password,
             String joinCode,
-            String accountType) {
+            String accountType,
+            String gdcNumber) {
     }
 
     public record AddPracticeRequest(
@@ -842,7 +867,8 @@ public class AccountRegistrationResource {
             String managerEmail,
             String email,
             String jobRole,
-            String employeeNumber) {
+            String employeeNumber,
+            Boolean headNurse) {
     }
 
     public record InvitationResponse(String code, String practiceName, String expiresAt, String employeeNumber) {

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { getKeycloak, initializeKeycloak } from "../../../lib/keycloak";
 import { usePracticeContext } from "../../../components/PracticeContext";
+import TeamInvitations from "../../../components/TeamInvitations";
 
 type Practice = { id: string; name: string; nextEmployeeNumber: string };
 type PracticesResponse = { practices: Practice[] };
@@ -17,6 +18,7 @@ export default function EmployeesPage() {
   const [practiceId, setPracticeId] = useState("");
   const [invitation, setInvitation] = useState<Invitation | null>(null);
   const [jobRole, setJobRole] = useState("DENTIST");
+  const [headNurse, setHeadNurse] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [employeeNumber, setEmployeeNumber] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -72,7 +74,13 @@ export default function EmployeesPage() {
           Authorization: `Bearer ${keycloak.token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ practiceId, jobRole, email: inviteEmail, employeeNumber }),
+        body: JSON.stringify({
+          practiceId,
+          jobRole,
+          headNurse: jobRole === "DENTAL_NURSE" && headNurse,
+          email: inviteEmail,
+          employeeNumber,
+        }),
       });
       const result = await response.json();
       if (!response.ok) {
@@ -81,6 +89,7 @@ export default function EmployeesPage() {
       setInvitation(result as Invitation);
       setInviteEmail("");
       setEmployeeNumber("");
+      setHeadNurse(false);
       setRefreshKey((key) => key + 1);
     } catch (error) {
       setMessage(
@@ -157,7 +166,10 @@ export default function EmployeesPage() {
               <select
                 className="mt-2 block min-h-11 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm"
                 id="invite-role"
-                onChange={(event) => setJobRole(event.target.value)}
+                onChange={(event) => {
+                  setJobRole(event.target.value);
+                  setHeadNurse(false);
+                }}
                 required
                 value={jobRole}
               >
@@ -166,6 +178,22 @@ export default function EmployeesPage() {
                 <option value="DENTAL_RECEPTIONIST">Dental receptionist</option>
               </select>
             </label>
+            {jobRole === "DENTAL_NURSE" && (
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
+                <input
+                  checked={headNurse}
+                  className="mt-1 accent-violet-700"
+                  onChange={(event) => setHeadNurse(event.target.checked)}
+                  type="checkbox"
+                />
+                <span>
+                  <strong className="block">Make this nurse the head nurse</strong>
+                  <span className="mt-1 block text-xs leading-5 text-slate-600">
+                    A practice can have one head nurse.
+                  </span>
+                </span>
+              </label>
+            )}
             <label className="block text-sm font-medium text-slate-700" htmlFor="invite-email">
               Colleague&apos;s email address
               <input
@@ -236,6 +264,14 @@ export default function EmployeesPage() {
         )}
       </div>
 
+      <div className="mt-8">
+        <TeamInvitations
+          emptyText="No colleague invitations yet."
+          kind="EMPLOYEE_CODE"
+          refreshKey={refreshKey}
+          title="Colleague invitations"
+        />
+      </div>
     </section>
   );
 }

@@ -11,6 +11,7 @@ export default function HomePage() {
   const [username, setUsername] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [gdcNumber, setGdcNumber] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -62,6 +63,7 @@ export default function HomePage() {
             password,
             joinCode,
             accountType: isEmployer ? "EMPLOYER" : "EMPLOYEE",
+            gdcNumber: isEmployer ? "" : gdcNumber,
             email,
           }),
         },
@@ -209,6 +211,24 @@ export default function HomePage() {
                   required
                   value={lastName}
                 />
+              </div>
+            )}
+
+            {screen === "employee-register" && (
+              <div className="auth-field">
+                <label htmlFor="gdc-number">GDC registration number</label>
+                <input
+                  autoComplete="off"
+                  id="gdc-number"
+                  inputMode="numeric"
+                  maxLength={6}
+                  name="gdc-number"
+                  onChange={(event) => setGdcNumber(event.target.value)}
+                  pattern="[0-9]{5,6}"
+                  placeholder="5 or 6 digits"
+                  value={gdcNumber}
+                />
+                <small>Required for dentists and dental nurses (including head nurses).</small>
               </div>
             )}
 

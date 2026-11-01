@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { getKeycloak, initializeKeycloak } from "../../../lib/keycloak";
+import TeamInvitations from "../../../components/TeamInvitations";
 
 type Practice = {
   id: string;
@@ -504,6 +505,15 @@ export default function PracticesPage() {
                 </div>
               )}
             </section>
+            )}
+
+            {isOwner && (
+              <TeamInvitations
+                emptyText="No practice manager invitations yet."
+                kind="MANAGER_CODE"
+                refreshKey={invitation ? invitation.code.length + invitation.expiresAt.length : 0}
+                title="Practice manager invitations"
+              />
             )}
           </>
         )}
