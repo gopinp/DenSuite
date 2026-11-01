@@ -232,7 +232,11 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
   }
 
   const title = (pathname === "/hr/practices" && isManagerOnly ? "Practice" : pageTitles[pathname]) ?? "Den Suite";
-  const visibleLinks = [...workspaceLinks, ...productLinks, ...teamLinks];
+  const visibleWorkspaceLinks = canSelectPractice
+    ? workspaceLinks
+    : workspaceLinks.filter((item) => item.href !== "/hr/practices");
+  const visibleProductLinks = productLinks;
+  const visibleLinks = [...visibleWorkspaceLinks, ...visibleProductLinks, ...teamLinks];
   const selectedPractice = practices.find((practice) => practice.id === selectedPracticeId) ?? null;
 
   function PracticePicker({ id, className }: { id: string; className?: string }) {
@@ -300,18 +304,20 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
           <span>Den <span className="brand-light">Suite</span></span>
         </Link>
 
-        <div className="practice-switcher">
-          <span className="practice-avatar">D</span>
-          <span className="practice-copy">
-            <strong>{selectedPractice?.name ?? "Practice workspace"}</strong>
-            <small>{selectedPractice ? "Current practice" : "Choose a practice"}</small>
-          </span>
-          <PracticePicker id="practice-context-sidebar" className="practice-switcher-select" />
-        </div>
+        {canSelectPractice && (
+          <div className="practice-switcher">
+            <span className="practice-avatar">D</span>
+            <span className="practice-copy">
+              <strong>{selectedPractice?.name ?? "Practice workspace"}</strong>
+              <small>{selectedPractice ? "Current practice" : "Choose a practice"}</small>
+            </span>
+            <PracticePicker id="practice-context-sidebar" className="practice-switcher-select" />
+          </div>
+        )}
 
         <p className="nav-caption">WORKSPACE</p>
         <nav className="side-nav" aria-label="Workspace navigation">
-          {workspaceLinks.map((item) => (
+          {visibleWorkspaceLinks.map((item) => (
             <SideLink
               key={item.href}
               {...item}
@@ -323,7 +329,7 @@ export default function SuiteShell({ children }: { children: React.ReactNode }) 
 
         <p className="nav-caption products-caption">YOUR PRODUCTS</p>
         <nav className="side-nav product-nav" aria-label="Den Suite products">
-          {productLinks.map((item) => (
+          {visibleProductLinks.map((item) => (
             <SideLink key={item.href} {...item} pathname={pathname} />
           ))}
         </nav>

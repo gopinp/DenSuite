@@ -13,6 +13,54 @@ type Invitation = { code: string; practiceName: string; expiresAt: string; emplo
 const apiBase = process.env.NEXT_PUBLIC_DENTSTAFF_API_URL ?? "http://localhost:8085";
 
 export default function EmployeesPage() {
+  const [canManage, setCanManage] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    initializeKeycloak()
+      .then(() => {
+        const keycloak = getKeycloak();
+        setCanManage(keycloak.hasRealmRole("EMPLOYER") || keycloak.hasRealmRole("PRACTICE_MANAGER"));
+      })
+      .catch(() => setCanManage(false));
+  }, []);
+
+  if (canManage === null) {
+    return <p className="text-sm text-slate-500" role="status">Loading…</p>;
+  }
+  return canManage ? <ManageEmployees /> : <StaffHome />;
+}
+
+function StaffHome() {
+  const links = [
+    { href: "/hr/leave", title: "Leave", text: "Request time off and see your leave." },
+    { href: "/hr/payroll", title: "Payroll", text: "View your payslips and pay details." },
+  ];
+  return (
+    <section className="space-y-7">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-[0.15em] text-violet-700">DEN STAFF</p>
+        <h1 className="mt-2 text-2xl font-semibold text-slate-900">Den Staff</h1>
+        <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+          Your leave and payroll, all in one place.
+        </p>
+      </div>
+      <div className="grid max-w-2xl gap-4 sm:grid-cols-2">
+        {links.map((item) => (
+          <Link
+            className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm hover:border-violet-300"
+            href={item.href}
+            key={item.href}
+          >
+            <h2 className="text-base font-semibold text-slate-900">{item.title}</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">{item.text}</p>
+          </Link>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ManageEmployees() {
   const { selectedPracticeId, setSelectedPracticeId } = usePracticeContext();
   const [practices, setPractices] = useState<Practice[]>([]);
   const [practiceId, setPracticeId] = useState("");
