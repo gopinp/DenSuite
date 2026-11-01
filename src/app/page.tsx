@@ -171,14 +171,14 @@ export default function HomePage() {
             )}
 
             {screen !== "register-choice" && <div className="auth-field">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="username">{isRegister ? "Username" : "Username or email address"}</label>
               <input
                 autoComplete="username"
                 autoCapitalize="none"
                 id="username"
                 name="username"
                 onChange={(event) => setUsername(event.target.value)}
-                placeholder="Enter your username"
+                placeholder={isRegister ? "Enter your username" : "Username or email address"}
                 required
                 value={username}
               />

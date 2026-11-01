@@ -4,7 +4,7 @@
   "displayName": "Den Suite",
   "loginTheme": "den-suite",
   "registrationAllowed": false,
-  "loginWithEmailAllowed": false,
+  "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "resetPasswordAllowed": true,
   "roles": {
